@@ -146,3 +146,49 @@ vector<int> ejecutarRR(const vector<int> &ti, const vector<int> &t, int q) {
     }
     return tf;
 }
+
+// Comparación final basada en pE 
+void compararPorPE(double peF, double peL, double peR) {
+    cout << "\n" << string(55, '*') << "\n";
+    cout << "   COMPARATIVA FINAL POR PROMEDIO DE EFICACIA (pE)\n";
+    cout << string(55, '*') << "\n";
+    cout << " - FIFO:        " << fixed << setprecision(2) << peF << endl;
+    cout << " - LIFO:        " << peL << endl;
+    cout << " - ROUND ROBIN: " << peR << endl;
+
+    string mejor;
+    double minPE = min({peF, peL, peR});
+
+    if (minPE == peF) mejor = "FIFO";
+    else if (minPE == peL) mejor = "LIFO";
+    else mejor = "ROUND ROBIN";
+
+    cout << "\n CONCLUSION: El algoritmo mas optimo es " << mejor << " (menor pE)" << endl;
+    cout << string(55, '*') << "\n";
+}
+
+int main() {
+    vector<string> ids;
+    vector<int> ti, t;
+    cargarDatos("data/Datos.csv", ids, ti, t);
+
+    // Mediciones y resultados de pE
+    auto s1 = high_resolution_clock::now();
+    vector<int> tf_f = ejecutarFIFO(ti, t);
+    auto e1 = high_resolution_clock::now();
+    double peF = obtenerPE("FIFO", ids, ti, t, tf_f, duration_cast<microseconds>(e1-s1).count());
+
+    auto s2 = high_resolution_clock::now();
+    vector<int> tf_l = ejecutarLIFO(ti, t);
+    auto e2 = high_resolution_clock::now();
+    double peL = obtenerPE("LIFO", ids, ti, t, tf_l, duration_cast<microseconds>(e2-s2).count());
+
+    auto s3 = high_resolution_clock::now();
+    vector<int> tf_r = ejecutarRR(ti, t, 4);
+    auto e3 = high_resolution_clock::now();
+    double peR = obtenerPE("ROUND ROBIN (Q=4)", ids, ti, t, tf_r, duration_cast<microseconds>(e3-s3).count());
+
+    compararPorPE(peF, peL, peR);
+
+    return 0;
+}
