@@ -6,200 +6,170 @@
 #include <algorithm>
 #include <iomanip>
 #include <chrono>
+#include <queue>
+#include <stack>
 
 using namespace std;
 using namespace std::chrono;
 
-// --- ESTRUCTURA DE DATOS ---
 struct Actividad {
     string id;
-    int ti, t, tf, T;
+    int ti, t, tf, T, t_restante;
     long long E; 
     double I;
 };
 
-// --- CARGA DE DATOS (data/Datos.csv) ---
-void cargarDatos(string ruta, vector<string> &ids, vector<int> &ti, vector<int> &t) {
+// --- CARGA DE DATOS ---
+void cargarDatos(string ruta, vector<Actividad> &base) {
     ifstream archivo(ruta);
-    if (!archivo) {
-        cerr << "Error: No se encuentra el archivo en " << ruta << endl;
-        exit(1);
-    }
+    if (!archivo) { cerr << "Error: No existe data/Datos.csv" << endl; exit(1); }
     string linea;
-    bool primeraLinea = true;
-
+    bool primera = true;
     while (getline(archivo, linea)) {
         if (linea.empty()) continue;
         stringstream ss(linea);
-        string id_val, ti_val, t_val;
-        
-        if (getline(ss, id_val, ',') && getline(ss, ti_val, ',') && getline(ss, t_val)) {
-            // Salto inteligente de encabezado: si ti_val no es un numero, es texto de titulo
-            if (primeraLinea && (ti_val.find_first_not_of("0123456789") != string::npos)) {
-                primeraLinea = false;
-                continue;
+        string id_v, ti_v, t_v;
+        if (getline(ss, id_v, ',') && getline(ss, ti_v, ',') && getline(ss, t_v)) {
+            if (primera && (ti_v.find_first_not_of("0123456789") != string::npos)) {
+                primera = false; continue;
             }
-            ids.push_back(id_val);
-            ti.push_back(stoi(ti_val));
-            t.push_back(stoi(t_val));
+            base.push_back({id_v, stoi(ti_v), stoi(t_v), 0, 0, stoi(t_v), 0, 0});
         }
-        primeraLinea = false;
+        primera = false;
     }
 }
 
-// --- CÁLCULO DE MÉTRICAS E IMPRESIÓN ---
-double obtenerPE(string nombre, const vector<string> &ids, const vector<int> &ti, const vector<int> &t, const vector<int> &tf, double micro) {
-    int n = ids.size();
-    double sumT = 0, sumI = 0;
-    long long sumE = 0;
-
-    cout << "\n" << string(75, '=') << "\n";
-    cout << " ESTRATEGIA: " << nombre << "\n";
-    cout << string(75, '=') << "\n";
-    cout << left << setw(6) << "Proc" << " | " << setw(4) << "ti" << " | " << setw(4) << "t" 
-         << " | " << setw(4) << "tf" << " | " << setw(4) << "T" << " | " << setw(14) << "E" << " | I" << endl;
-    cout << string(75, '-') << "\n";
-
-    for (int i = 0; i < n; i++) {
-        // FORMULAS REQUERIDAS
-        int T_val = tf[i] - ti[i];                // T = tf - ti
-        long long E_val = (long long)T_val * t[i]; // E = T * t
-        double I_val = (T_val != 0) ? (double)t[i] / T_val : 0; // I = t / T
-
-        cout << left << setw(6) << ids[i] << " | " << setw(4) << ti[i] << " | " << setw(4) << t[i] 
-             << " | " << setw(4) << tf[i] << " | " << setw(4) << T_val << " | " << setw(14) << E_val 
-             << " | " << fixed << setprecision(4) << I_val << endl;
-        
-        sumT += T_val; sumE += E_val; sumI += I_val;
+// --- MÉTRICAS ---
+double procesarMétricas(string nombre, vector<Actividad> &res, double micro) {
+    int n = res.size();
+    double sumT = 0, sumI = 0; long long sumE = 0;
+    cout << "\n================= " << nombre << " (TEORIA REAL) =================\n";
+    cout << left << setw(6) << "Proc" << "| ti | t | tf | T |" << setw(14) << " E" << " | I" << endl;
+    cout << string(70, '-') << endl;
+    
+    for (auto &a : res) {
+        a.T = a.tf - a.ti;
+        a.E = (long long)a.T * a.t;
+        a.I = (double)a.t / a.T;
+        cout << left << setw(6) << a.id << "| " << setw(3) << a.ti << "| " << setw(2) << a.t << "| " << setw(3) << a.tf << "| " << setw(3) << a.T << "| " << setw(13) << a.E << "| " << fixed << setprecision(4) << a.I << endl;
+        sumT += a.T; sumE += a.E; sumI += a.I;
     }
-
     double pE = (double)sumE / n;
-    cout << string(75, '-') << "\n";
-    cout << " PROMEDIOS: pT = " << sumT/n << " | pE = " << pE << " | pI = " << sumI/n << "\n";
-    cout << " TIEMPO DE CALCULO: " << micro << " microsegundos\n";
-    return pE; 
+    cout << "----------------------------------------------------------\n";
+    cout << "PROMEDIOS: pT=" << fixed << setprecision(2) << sumT/n << " | pE=" << pE << " | pI=" << sumI/n << endl;
+    cout << "TIEMPO DE CALCULO: " << micro << " us" << endl;
+    return pE;
 }
 
-// --- ALGORITMOS (Lógica idéntica a tus archivos de Python) ---
-
-vector<int> ejecutarFIFO(const vector<int> &ti, const vector<int> &t) {
-    int n = ti.size();
-    vector<int> tf(n, 0);
+// --- FIFO REAL (First-In, First-Out) ---
+double fifoReal(vector<Actividad> lista) {
+    auto start = high_resolution_clock::now();
+    int n = lista.size(), reloj = 0, hechos = 0;
     vector<bool> done(n, false);
-    int t_clock = 0, completados = 0;
-    while (completados < n) {
-        bool encontrado = false;
+    vector<Actividad> resultado;
+
+    while (hechos < n) {
+        int idx = -1;
         for (int i = 0; i < n; i++) {
-            if (!done[i] && ti[i] <= t_clock) {
-                t_clock += t[i];
-                tf[i] = t_clock;
-                done[i] = true;
-                completados++;
-                encontrado = true;
-                break; 
+            if (!done[i] && lista[i].ti <= reloj) {
+                if (idx == -1 || lista[i].ti < lista[idx].ti) idx = i;
             }
         }
-        if (!encontrado) t_clock++; 
+        if (idx == -1) { reloj++; continue; }
+        reloj += lista[idx].t;
+        lista[idx].tf = reloj;
+        done[idx] = true;
+        resultado.push_back(lista[idx]);
+        hechos++;
     }
-    return tf;
+    return procesarMétricas("FIFO", resultado, duration_cast<microseconds>(high_resolution_clock::now()-start).count());
 }
 
-vector<int> ejecutarLIFO(const vector<int> &ti, const vector<int> &t) {
-    int n = ti.size();
-    vector<int> tf(n, 0);
+// --- LIFO REAL (Last-In, First-Out) ---
+double lifoReal(vector<Actividad> lista) {
+    auto start = high_resolution_clock::now();
+    int n = lista.size(), reloj = 0, hechos = 0;
     vector<bool> done(n, false);
-    int t_clock = 0, completados = 0;
-    while (completados < n) {
-        bool encontrado = false;
-        for (int i = n - 1; i >= 0; i--) { 
-            if (!done[i] && ti[i] <= t_clock) {
-                t_clock += t[i];
-                tf[i] = t_clock;
-                done[i] = true;
-                completados++;
-                encontrado = true;
-                break;
-            }
-        }
-        if (!encontrado) t_clock++;
-    }
-    return tf;
-}
+    vector<Actividad> resultado;
 
-vector<int> ejecutarRR(const vector<int> &ti, const vector<int> &t, int q) {
-    int n = ti.size();
-    vector<int> tf(n, 0), rem = t;
-    vector<bool> done(n, false);
-    int t_clock = 0, completados = 0;
-    while (completados < n) {
-        bool encontrado_ciclo = false;
+    while (hechos < n) {
+        int idx = -1;
         for (int i = 0; i < n; i++) {
-            if (!done[i] && ti[i] <= t_clock) {
-                int run_time = (rem[i] < q) ? rem[i] : q; 
-                t_clock += run_time;
-                rem[i] -= run_time;
-                encontrado_ciclo = true;
-                if (rem[i] == 0) {
-                    done[i] = true;
-                    tf[i] = t_clock;
-                    completados++;
-                }
+            if (!done[i] && lista[i].ti <= reloj) {
+                // Elige al que llegó de ÚLTIMO entre los disponibles
+                if (idx == -1 || lista[i].ti > lista[idx].ti) idx = i;
             }
         }
-        if (!encontrado_ciclo) t_clock++;
+        if (idx == -1) { reloj++; continue; }
+        reloj += lista[idx].t;
+        lista[idx].tf = reloj;
+        done[idx] = true;
+        resultado.push_back(lista[idx]);
+        hechos++;
     }
-    return tf;
+    return procesarMétricas("LIFO", resultado, duration_cast<microseconds>(high_resolution_clock::now()-start).count());
 }
 
-// --- COMPARATIVA FINAL BASADA EN pE ---
-void compararAlgoritmos(double peF, double peL, double peR) {
-    cout << "\n" << string(60, '*') << "\n";
-    cout << "   RESUMEN COMPARATIVO POR PROMEDIO DE EFICACIA (pE)\n";
-    cout << string(60, '*') << "\n";
-    cout << fixed << setprecision(2);
-    cout << " - FIFO:        " << peF << endl;
-    cout << " - LIFO:        " << peL << endl;
-    cout << " - ROUND ROBIN: " << peR << endl;
+// --- ROUND ROBIN REAL (Quantum con Cola de Listos) ---
+double rrReal(vector<Actividad> lista, int Q) {
+    auto start = high_resolution_clock::now();
+    int n = lista.size(), reloj = 0, hechos = 0;
+    queue<int> cola_ready;
+    vector<bool> en_cola(n, false), completado(n, false);
 
-    string mejor;
-    double minPE = min({peF, peL, peR});
+    auto revisar_llegadas = [&]() {
+        for (int i = 0; i < n; i++) {
+            if (!completado[i] && !en_cola[i] && lista[i].ti <= reloj) {
+                cola_ready.push(i);
+                en_cola[i] = true;
+            }
+        }
+    };
 
-    if (minPE == peF) mejor = "FIFO";
-    else if (minPE == peL) mejor = "LIFO";
-    else mejor = "ROUND ROBIN";
+    revisar_llegadas();
+    while (hechos < n) {
+        if (cola_ready.empty()) { reloj++; revisar_llegadas(); continue; }
 
-    cout << "\n CONCLUSION: El algoritmo mas optimo es " << mejor << " (menor pE)" << endl;
-    cout << string(60, '*') << "\n";
+        int idx = cola_ready.front();
+        cola_ready.pop();
+
+        int t_ejec = min(Q, lista[idx].t_restante);
+        for(int i=0; i<t_ejec; i++) { 
+            reloj++; 
+            revisar_llegadas(); 
+        }
+        lista[idx].t_restante -= t_ejec;
+
+        if (lista[idx].t_restante == 0) {
+            lista[idx].tf = reloj;
+            completado[idx] = true;
+            hechos++;
+        } else {
+            revisar_llegadas();
+            cola_ready.push(idx); // Se va al final de la cola real
+        }
+    }
+    return procesarMétricas("ROUND ROBIN", lista, duration_cast<microseconds>(high_resolution_clock::now()-start).count());
 }
 
 int main() {
-    vector<string> ids;
-    vector<int> ti, t;
+    vector<Actividad> base;
+    cargarDatos("data/Datos.csv", base);
     
-    cargarDatos("data/Datos.csv", ids, ti, t);
+    double pE_f = fifoReal(base);
+    double pE_l = lifoReal(base);
+    double pE_r = rrReal(base, 4);
 
-    if (ids.empty()) {
-        cout << "No se cargaron datos. Verifique data/Datos.csv" << endl;
-        return 0;
-    }
+    cout << "\n" << string(60, '*') << endl;
+    cout << "   COMPARATIVA FINAL POR PROMEDIO DE EFICACIA (pE)" << endl;
+    cout << string(60, '*') << endl;
+    cout << " - FIFO: " << pE_f << "\n - LIFO: " << pE_l << "\n - RR:   " << pE_r << endl;
 
-    // Ejecuciones y mediciones de tiempo (pE se captura para la comparativa)
-    auto s1 = high_resolution_clock::now();
-    vector<int> tf_f = ejecutarFIFO(ti, t);
-    auto e1 = high_resolution_clock::now();
-    double peF = obtenerPE("FIFO", ids, ti, t, tf_f, duration_cast<microseconds>(e1-s1).count());
+    double mejor = min({pE_f, pE_l, pE_r});
+    string ganador = (mejor == pE_f) ? "FIFO" : (mejor == pE_l) ? "LIFO" : "ROUND ROBIN";
 
-    auto s2 = high_resolution_clock::now();
-    vector<int> tf_l = ejecutarLIFO(ti, t);
-    auto e2 = high_resolution_clock::now();
-    double peL = obtenerPE("LIFO", ids, ti, t, tf_l, duration_cast<microseconds>(e2-s2).count());
-
-    auto s3 = high_resolution_clock::now();
-    vector<int> tf_r = ejecutarRR(ti, t, 4); // Quantum de 4
-    auto e3 = high_resolution_clock::now();
-    double peR = obtenerPE("ROUND ROBIN (Q=4)", ids, ti, t, tf_r, duration_cast<microseconds>(e3-s3).count());
-
-    compararAlgoritmos(peF, peL, peR);
+    cout << "\n CONCLUSION: El algoritmo mas optimo es " << ganador << " (menor pE)" << endl;
+    cout << string(60, '*') << endl;
 
     return 0;
 }
