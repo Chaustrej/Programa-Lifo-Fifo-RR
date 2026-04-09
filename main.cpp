@@ -10,6 +10,7 @@
 using namespace std;
 using namespace std::chrono;
 
+// --- ESTRUCTURA DE DATOS ---
 struct Actividad {
     string id;
     int ti, t, tf, T;
@@ -17,7 +18,7 @@ struct Actividad {
     double I;
 };
 
-// Carga de datos desde data/Datos.csv 
+// --- CARGA DE DATOS (data/Datos.csv) ---
 void cargarDatos(string ruta, vector<string> &ids, vector<int> &ti, vector<int> &t) {
     ifstream archivo(ruta);
     if (!archivo) {
@@ -26,11 +27,14 @@ void cargarDatos(string ruta, vector<string> &ids, vector<int> &ti, vector<int> 
     }
     string linea;
     bool primeraLinea = true;
+
     while (getline(archivo, linea)) {
         if (linea.empty()) continue;
         stringstream ss(linea);
         string id_val, ti_val, t_val;
+        
         if (getline(ss, id_val, ',') && getline(ss, ti_val, ',') && getline(ss, t_val)) {
+            // Salto inteligente de encabezado: si ti_val no es un numero, es texto de titulo
             if (primeraLinea && (ti_val.find_first_not_of("0123456789") != string::npos)) {
                 primeraLinea = false;
                 continue;
@@ -43,23 +47,24 @@ void cargarDatos(string ruta, vector<string> &ids, vector<int> &ti, vector<int> 
     }
 }
 
-// Procesa métricas y retorna pE para la comparativa 
+// --- CÁLCULO DE MÉTRICAS E IMPRESIÓN ---
 double obtenerPE(string nombre, const vector<string> &ids, const vector<int> &ti, const vector<int> &t, const vector<int> &tf, double micro) {
     int n = ids.size();
     double sumT = 0, sumI = 0;
     long long sumE = 0;
 
-    cout << "\n" << string(70, '=') << "\n";
+    cout << "\n" << string(75, '=') << "\n";
     cout << " ESTRATEGIA: " << nombre << "\n";
-    cout << string(70, '=') << "\n";
+    cout << string(75, '=') << "\n";
     cout << left << setw(6) << "Proc" << " | " << setw(4) << "ti" << " | " << setw(4) << "t" 
          << " | " << setw(4) << "tf" << " | " << setw(4) << "T" << " | " << setw(14) << "E" << " | I" << endl;
-    cout << string(70, '-') << "\n";
+    cout << string(75, '-') << "\n";
 
     for (int i = 0; i < n; i++) {
-        int T_val = tf[i] - ti[i];                
-        long long E_val = (long long)T_val * t[i]; 
-        double I_val = (T_val != 0) ? (double)t[i] / T_val : 0;
+        // FORMULAS REQUERIDAS
+        int T_val = tf[i] - ti[i];                // T = tf - ti
+        long long E_val = (long long)T_val * t[i]; // E = T * t
+        double I_val = (T_val != 0) ? (double)t[i] / T_val : 0; // I = t / T
 
         cout << left << setw(6) << ids[i] << " | " << setw(4) << ti[i] << " | " << setw(4) << t[i] 
              << " | " << setw(4) << tf[i] << " | " << setw(4) << T_val << " | " << setw(14) << E_val 
@@ -69,13 +74,14 @@ double obtenerPE(string nombre, const vector<string> &ids, const vector<int> &ti
     }
 
     double pE = (double)sumE / n;
-    cout << string(70, '-') << "\n";
+    cout << string(75, '-') << "\n";
     cout << " PROMEDIOS: pT = " << sumT/n << " | pE = " << pE << " | pI = " << sumI/n << "\n";
     cout << " TIEMPO DE CALCULO: " << micro << " microsegundos\n";
     return pE; 
 }
 
-// Algoritmo FIFO
+// --- ALGORITMOS (Lógica idéntica a tus archivos de Python) ---
+
 vector<int> ejecutarFIFO(const vector<int> &ti, const vector<int> &t) {
     int n = ti.size();
     vector<int> tf(n, 0);
@@ -97,7 +103,6 @@ vector<int> ejecutarFIFO(const vector<int> &ti, const vector<int> &t) {
     }
     return tf;
 }
-// Algoritmo LIFO
 
 vector<int> ejecutarLIFO(const vector<int> &ti, const vector<int> &t) {
     int n = ti.size();
@@ -120,7 +125,6 @@ vector<int> ejecutarLIFO(const vector<int> &ti, const vector<int> &t) {
     }
     return tf;
 }
-// Algoritmo Round robin con quantum q = 4
 
 vector<int> ejecutarRR(const vector<int> &ti, const vector<int> &t, int q) {
     int n = ti.size();
@@ -147,12 +151,13 @@ vector<int> ejecutarRR(const vector<int> &ti, const vector<int> &t, int q) {
     return tf;
 }
 
-// Comparación final basada en pE 
-void compararPorPE(double peF, double peL, double peR) {
-    cout << "\n" << string(55, '*') << "\n";
-    cout << "   COMPARATIVA FINAL POR PROMEDIO DE EFICACIA (pE)\n";
-    cout << string(55, '*') << "\n";
-    cout << " - FIFO:        " << fixed << setprecision(2) << peF << endl;
+// --- COMPARATIVA FINAL BASADA EN pE ---
+void compararAlgoritmos(double peF, double peL, double peR) {
+    cout << "\n" << string(60, '*') << "\n";
+    cout << "   RESUMEN COMPARATIVO POR PROMEDIO DE EFICACIA (pE)\n";
+    cout << string(60, '*') << "\n";
+    cout << fixed << setprecision(2);
+    cout << " - FIFO:        " << peF << endl;
     cout << " - LIFO:        " << peL << endl;
     cout << " - ROUND ROBIN: " << peR << endl;
 
@@ -164,15 +169,21 @@ void compararPorPE(double peF, double peL, double peR) {
     else mejor = "ROUND ROBIN";
 
     cout << "\n CONCLUSION: El algoritmo mas optimo es " << mejor << " (menor pE)" << endl;
-    cout << string(55, '*') << "\n";
+    cout << string(60, '*') << "\n";
 }
 
 int main() {
     vector<string> ids;
     vector<int> ti, t;
+    
     cargarDatos("data/Datos.csv", ids, ti, t);
 
-    // Mediciones y resultados de pE
+    if (ids.empty()) {
+        cout << "No se cargaron datos. Verifique data/Datos.csv" << endl;
+        return 0;
+    }
+
+    // Ejecuciones y mediciones de tiempo (pE se captura para la comparativa)
     auto s1 = high_resolution_clock::now();
     vector<int> tf_f = ejecutarFIFO(ti, t);
     auto e1 = high_resolution_clock::now();
@@ -184,11 +195,11 @@ int main() {
     double peL = obtenerPE("LIFO", ids, ti, t, tf_l, duration_cast<microseconds>(e2-s2).count());
 
     auto s3 = high_resolution_clock::now();
-    vector<int> tf_r = ejecutarRR(ti, t, 4);
+    vector<int> tf_r = ejecutarRR(ti, t, 4); // Quantum de 4
     auto e3 = high_resolution_clock::now();
     double peR = obtenerPE("ROUND ROBIN (Q=4)", ids, ti, t, tf_r, duration_cast<microseconds>(e3-s3).count());
 
-    compararPorPE(peF, peL, peR);
+    compararAlgoritmos(peF, peL, peR);
 
     return 0;
 }
