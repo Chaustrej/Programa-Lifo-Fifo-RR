@@ -1,12 +1,12 @@
-#include <iostream>
+#include <iostream> 
 #include <vector>
 #include <string>
-#include <fstream>
-#include <sstream>
-#include <algorithm>
-#include <iomanip>
-#include <chrono>
-#include <queue>
+#include <fstream> // Para manejo de archivos
+#include <sstream> // Para manejo de archivos y cadenas
+#include <algorithm> // Para std::min y std::max
+#include <iomanip> // Para formatear la salida
+#include <chrono> // Para medir tiempos
+#include <queue> // Para std::queue
 
 using namespace std;
 using namespace std::chrono;
@@ -18,7 +18,7 @@ struct Actividad {
     double I;
 };
 
-// --- FUNCIÓN DE CARGA (Lectura de .csv) ---
+// -FUNCIÓN DE CARGA-
 void cargarDatos(string ruta, vector<Actividad> &base) {
     ifstream archivo(ruta);
     if (!archivo) { 
@@ -42,14 +42,14 @@ void cargarDatos(string ruta, vector<Actividad> &base) {
     archivo.close();
 }
 
-// --- FUNCIÓN PARA PROCESAR Y ESCRIBIR RESULTADOS ---
+// - FUNCIÓN PARA PROCESAR Y ESCRIBIR RESULTADOS -
 double procesarYGrabar(string nombre, vector<Actividad> &res, double micro, ofstream &salida) {
     int n = res.size();
     double sumT = 0, sumI = 0; long long sumE = 0;
 
     // Preparamos el encabezado para consola y archivo
     string header = "\n================= " + nombre + " =================\n";
-    header += "Proc  | ti | t  | tf | T  |      E       |    I\n";
+    header += "ID | ti | t  | tf | T  |      E       |    I\n";
     header += "----------------------------------------------------------\n";
     
     cout << header;
@@ -72,17 +72,17 @@ double procesarYGrabar(string nombre, vector<Actividad> &res, double micro, ofst
         sumT += a.T; sumE += a.E; sumI += a.I;
     }
 
-    double pE = (double)sumE / n;
+    double pT = sumT / n;
     string footer = "----------------------------------------------------------\n";
-    footer += "PROMEDIOS: pT=" + to_string(sumT/n) + " | pE=" + to_string(pE) + " | pI=" + to_string(sumI/n) + "\n";
+    footer += "PROMEDIOS: pT=" + to_string(pT) + " | pE=" + to_string(sumE/n) + " | pI=" + to_string(sumI/n) + "\n";
     footer += "TIEMPO DE CALCULO: " + to_string(micro) + " us\n";
 
     cout << footer;
     salida << footer;
-    return pE;
+    return pT;
 }
 
-// --- ALGORITMOS (Lógica Teórica Real) ---
+// -ALGORITMOS-
 
 double ejecutarFIFO(vector<Actividad> lista, ofstream &salida) {
     auto start = high_resolution_clock::now();
@@ -164,18 +164,18 @@ int main() {
     ofstream archivoSalida("Resultados.txt");
     if (!archivoSalida) { cerr << "No se pudo crear el archivo de resultados." << endl; return 1; }
 
-    double peF = ejecutarFIFO(base, archivoSalida);
-    double peL = ejecutarLIFO(base, archivoSalida);
-    double peR = ejecutarRR(base, 4, archivoSalida);
+    double ptF = ejecutarFIFO(base, archivoSalida);
+    double ptL = ejecutarLIFO(base, archivoSalida);
+    double ptR = ejecutarRR(base, 4, archivoSalida);
 
     // Comparativa Final
     string finalComp = "\n************************************************************\n";
-    finalComp += "   COMPARATIVA FINAL POR pE (Promedio de Eficacia)\n";
+    finalComp += "   COMPARATIVA FINAL POR pT (Promedio de Eficacia)\n";
     finalComp += "************************************************************\n";
-    finalComp += " - FIFO: " + to_string(peF) + "\n - LIFO: " + to_string(peL) + "\n - RR:   " + to_string(peR) + "\n";
+    finalComp += " - FIFO: " + to_string(ptF) + "\n - LIFO: " + to_string(ptL) + "\n - RR:   " + to_string(ptR) + "\n";
     
-    double mejorVal = min({peF, peL, peR});
-    string ganador = (mejorVal == peF) ? "FIFO" : (mejorVal == peL) ? "LIFO" : "ROUND ROBIN";
+    double mejorVal = min({ptF, ptL, ptR});
+    string ganador = (mejorVal == ptF) ? "FIFO" : (mejorVal == ptL) ? "LIFO" : "ROUND ROBIN";
     finalComp += "\n CONCLUSION: El algoritmo mas optimo es " + ganador + "\n";
     finalComp += "************************************************************\n";
 
@@ -183,7 +183,7 @@ int main() {
     archivoSalida << finalComp;
 
     archivoSalida.close();
-    cout << "\n[SISTEMA] Los resultados han sido guardados en 'Resultados.txt'" << endl;
+    cout << "Los resultados han sido guardados en 'Resultados.txt'" << endl;
 
     return 0;
 }
