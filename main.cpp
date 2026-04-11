@@ -1,189 +1,169 @@
-#include <iostream> 
+#include <iostream>
 #include <vector>
 #include <string>
-#include <fstream> // Para manejo de archivos
-#include <sstream> // Para manejo de archivos y cadenas
-#include <algorithm> // Para std::min y std::max
-#include <iomanip> // Para formatear la salida
-#include <chrono> // Para medir tiempos
-#include <queue> // Para std::queue
+#include <fstream>
+#include <sstream>
+#include <iomanip>
+#include <algorithm>
+#include <chrono>
+#include <queue>
 
 using namespace std;
-using namespace std::chrono;
 
-struct Actividad {
+// Estructura 
+struct Proceso {
     string id;
-    int ti, t, tf, T, t_restante;
-    long long E; 
-    double I;
+    int ti;            // Tiempo de llegada
+    int t;             // Tiempo de ejecucion
+    int tf = 0;        // Tiempo final
+    int t_restante;    // Auxiliar para Round Robin
+    double T = 0;      // Tiempo de retorno
+    double E = 0;      // Tiempo de espera (Eficacia)
+    double I = 0;      // Indice de rendimiento
 };
 
-// -FUNCIÓN DE CARGA-
-void cargarDatos(string ruta, vector<Actividad> &base) {
-    ifstream archivo(ruta);
-    if (!archivo) { 
-        cerr << "ERROR: No se pudo abrir " << ruta << endl; 
-        exit(1); 
+class GestorProcesos {
+private:
+    vector<Proceso> listaBase;
+
+    void calcularMetricas(Proceso &p) {
+        p.T = (double)p.tf - p.ti;
+        p.E = p.T - p.t; 
+        p.I = (p.T > 0) ? (double)p.t / p.T : 0;
     }
-    string linea;
-    bool primera = true;
-    while (getline(archivo, linea)) {
-        if (linea.empty()) continue;
-        stringstream ss(linea);
-        string id_v, ti_v, t_v;
-        if (getline(ss, id_v, ',') && getline(ss, ti_v, ',') && getline(ss, t_v)) {
-            if (primera && (ti_v.find_first_not_of("0123456789") != string::npos)) {
-                primera = false; continue;
+
+public:
+    void cargarDatos(string ruta) {
+        ifstream f(ruta);
+        string l;
+        bool cabecera = true;
+        while (getline(f, l)) {
+            if (l.empty()) continue;
+            stringstream ss(l);
+            string id, s_ti, s_t;
+            if (getline(ss, id, ',') && getline(ss, s_ti, ',') && getline(ss, s_t)) {
+                if (cabecera && (s_ti.find_first_not_of("0123456789") != string::npos)) {
+                    cabecera = false; continue;
+                }
+                listaBase.push_back({id, stoi(s_ti), stoi(s_t), 0, stoi(s_t)});
             }
-            base.push_back({id_v, stoi(ti_v), stoi(t_v), 0, 0, stoi(t_v), 0, 0});
+            cabecera = false;
         }
-        primera = false;
     }
-    archivo.close();
-}
 
-// - FUNCIÓN PARA PROCESAR Y ESCRIBIR RESULTADOS -
-double procesarYGrabar(string nombre, vector<Actividad> &res, double micro, ofstream &salida) {
-    int n = res.size();
-    double sumT = 0, sumI = 0; long long sumE = 0;
+    double imprimirTabla(string metodo, const vector<Proceso> &resultados) {
+        double acumT = 0, acumE = 0, acumI = 0;
+        int n = resultados.size();
 
-    // Preparamos el encabezado para consola y archivo
-    string header = "\n================= " + nombre + " =================\n";
-    header += "ID | ti | t  | tf | T  |      E       |    I\n";
-    header += "----------------------------------------------------------\n";
-    
-    cout << header;
-    salida << header;
+        cout << "\n>>> ESTRATEGIA: " << metodo << " <<<\n";
+        cout << "ID\tti\tt\ttf\tT\tE\tI\n" << string(50, '-') << endl;
 
-    for (auto &a : res) {
-        a.T = a.tf - a.ti;
-        a.E = (long long)a.T * a.t;
-        a.I = (double)a.t / a.T;
+        for (const auto &p : resultados) {
+            acumT += p.T; acumE += p.E; acumI += p.I;
+            cout << p.id << "\t" << p.ti << "\t" << p.t << "\t" << p.tf << "\t" 
+                 << (int)p.T << "\t" << (int)p.E << "\t" 
+                 << fixed << setprecision(4) << p.I << endl;
+        }
 
-        // Formateo de línea
-        stringstream ss;
-        ss << left << setw(6) << a.id << "| " << setw(3) << a.ti << "| " << setw(3) << a.t 
-           << "| " << setw(3) << a.tf << "| " << setw(3) << a.T << "| " << setw(13) << a.E 
-           << "| " << fixed << setprecision(4) << a.I << "\n";
+        double promedioT = acumT / n;
+        cout << string(50, '-') << endl;
+        cout << "PROMEDIOS: pT=" << fixed << setprecision(2) << promedioT 
+             << " | pE=" << acumE/n << " | pI=" << (acumI/n)*100 << "%\n";
         
-        cout << ss.str();
-        salida << ss.str();
-
-        sumT += a.T; sumE += a.E; sumI += a.I;
+        return promedioT;
     }
 
-    double pT = sumT / n;
-    string footer = "----------------------------------------------------------\n";
-    footer += "PROMEDIOS: pT=" + to_string(pT) + " | pE=" + to_string(sumE/n) + " | pI=" + to_string(sumI/n) + "\n";
-    footer += "TIEMPO DE CALCULO: " + to_string(micro) + " sec\n";
+    // Algoritmos 
+    vector<Proceso> modoEstatico(bool usarLifo) {
+        vector<Proceso> copia = listaBase;
+        vector<bool> completado(copia.size(), false);
+        int cronometro = 0, finalizados = 0;
 
-    cout << footer;
-    salida << footer;
-    return pT;
-}
+        while (finalizados < copia.size()) {
+            int seleccionado = -1;
+            for (int i = 0; i < (int)copia.size(); i++) {
+                // LIFO busca desde el ultimo ingresado (atras hacia adelante)
+                int idx = usarLifo ? (copia.size() - 1 - i) : i;
+                if (!completado[idx] && copia[idx].ti <= cronometro) {
+                    seleccionado = idx; 
+                    break;
+                }
+            }
 
-// -ALGORITMOS-
+            if (seleccionado == -1) { 
+                cronometro++; // Simula tiempo de espera del CPU (No Op)
+                continue; 
+            }
 
-double ejecutarFIFO(vector<Actividad> lista, ofstream &salida) {
-    auto start = high_resolution_clock::now();
-    int n = lista.size(), reloj = 0, hechos = 0;
-    vector<bool> done(n, false);
-    vector<Actividad> resultado;
-    while (hechos < n) {
-        int idx = -1;
-        for (int i = 0; i < n; i++) {
-            if (!done[i] && lista[i].ti <= reloj) {
-                if (idx == -1 || lista[i].ti < lista[idx].ti) idx = i;
+            cronometro += copia[seleccionado].t;
+            copia[seleccionado].tf = cronometro;
+            completado[seleccionado] = true;
+            calcularMetricas(copia[seleccionado]);
+            finalizados++;
+        }
+        return copia; 
+    }
+
+    // Algoritmo Round Robin
+    vector<Proceso> modoCircular(int quantum) {
+        vector<Proceso> copia = listaBase;
+        int n = copia.size();
+        queue<int> colaEspera;
+        vector<bool> enCola(n, false), terminado(n, false);
+        int cronometro = 0, finalizados = 0;
+
+        auto chequearEntradas = [&]() {
+            for (int i = 0; i < n; i++) {
+                if (!terminado[i] && !enCola[i] && copia[i].ti <= cronometro) {
+                    colaEspera.push(i); enCola[i] = true;
+                }
+            }
+        };
+
+        while (finalizados < n) {
+            chequearEntradas();
+            if (colaEspera.empty()) { cronometro++; continue; }
+
+            int idx = colaEspera.front(); colaEspera.pop();
+            int rafagaActual = min(quantum, copia[idx].t_restante);
+            
+            for(int i=0; i<rafagaActual; i++) { 
+                cronometro++; 
+                chequearEntradas(); 
+            }
+            copia[idx].t_restante -= rafagaActual;
+
+            if (copia[idx].t_restante == 0) {
+                copia[idx].tf = cronometro;
+                calcularMetricas(copia[idx]);
+                terminado[idx] = true;
+                finalizados++;
+            } else {
+                chequearEntradas();
+                colaEspera.push(idx);
             }
         }
-        if (idx == -1) { reloj++; continue; }
-        reloj += lista[idx].t;
-        lista[idx].tf = reloj;
-        done[idx] = true;
-        resultado.push_back(lista[idx]);
-        hechos++;
+        return copia;
     }
-    return procesarYGrabar("FIFO", resultado, duration_cast<microseconds>(high_resolution_clock::now()-start).count(), salida);
-}
-
-double ejecutarLIFO(vector<Actividad> lista, ofstream &salida) {
-    auto start = high_resolution_clock::now();
-    int n = lista.size(), reloj = 0, hechos = 0;
-    vector<bool> done(n, false);
-    vector<Actividad> resultado;
-    while (hechos < n) {
-        int idx = -1;
-        for (int i = 0; i < n; i++) {
-            if (!done[i] && lista[i].ti <= reloj) {
-                if (idx == -1 || lista[i].ti > lista[idx].ti) idx = i;
-            }
-        }
-        if (idx == -1) { reloj++; continue; }
-        reloj += lista[idx].t;
-        lista[idx].tf = reloj;
-        done[idx] = true;
-        resultado.push_back(lista[idx]);
-        hechos++;
-    }
-    return procesarYGrabar("LIFO", resultado, duration_cast<microseconds>(high_resolution_clock::now()-start).count(), salida);
-}
-
-double ejecutarRR(vector<Actividad> lista, int Q, ofstream &salida) {
-    auto start = high_resolution_clock::now();
-    int n = lista.size(), reloj = 0, hechos = 0;
-    queue<int> cola_ready;
-    vector<bool> en_cola(n, false), completado(n, false);
-    auto revisar = [&]() {
-        for (int i = 0; i < n; i++) {
-            if (!completado[i] && !en_cola[i] && lista[i].ti <= reloj) {
-                cola_ready.push(i); en_cola[i] = true;
-            }
-        }
-    };
-    revisar();
-    while (hechos < n) {
-        if (cola_ready.empty()) { reloj++; revisar(); continue; }
-        int idx = cola_ready.front(); cola_ready.pop();
-        int t_ejec = min(Q, lista[idx].t_restante);
-        for(int i=0; i<t_ejec; i++) { reloj++; revisar(); }
-        lista[idx].t_restante -= t_ejec;
-        if (lista[idx].t_restante == 0) {
-            lista[idx].tf = reloj; completado[idx] = true; hechos++;
-        } else {
-            revisar(); cola_ready.push(idx);
-        }
-    }
-    return procesarYGrabar("ROUND ROBIN", lista, duration_cast<microseconds>(high_resolution_clock::now()-start).count(), salida);
-}
+};
 
 int main() {
-    vector<Actividad> base;
-    cargarDatos("data/Datos.csv", base);
+    GestorProcesos sistema;
+    sistema.cargarDatos("data/Datos.csv");
 
-    // Abrimos el archivo de salida .txt
-    ofstream archivoSalida("Resultados.txt");
-    if (!archivoSalida) { cerr << "No se pudo crear el archivo de resultados." << endl; return 1; }
+    // Ejecucion manteniendo el orden ID original en la tabla
+    double resFIFO = sistema.imprimirTabla("FIFO", sistema.modoEstatico(false));
+    double resLIFO = sistema.imprimirTabla("LIFO", sistema.modoEstatico(true));
+    double resRR   = sistema.imprimirTabla("ROUND ROBIN (Q=4)", sistema.modoCircular(4));
 
-    double ptF = ejecutarFIFO(base, archivoSalida);
-    double ptL = ejecutarLIFO(base, archivoSalida);
-    double ptR = ejecutarRR(base, 4, archivoSalida);
+    // Comparativa final
+    double minPT = min({resFIFO, resLIFO, resRR});
+    string mejorOp = (minPT == resFIFO) ? "FIFO" : (minPT == resLIFO) ? "LIFO" : "ROUND ROBIN";
 
-    // Comparativa Final
-    string finalComp = "\n************************************************************\n";
-    finalComp += "   Comparacion por promedio de eficacia\n";
-    finalComp += "************************************************************\n";
-    finalComp += " - FIFO: " + to_string(ptF) + "\n - LIFO: " + to_string(ptL) + "\n - RR:   " + to_string(ptR) + "\n";
-    
-    double mejorVal = min({ptF, ptL, ptR});
-    string ganador = (mejorVal == ptF) ? "FIFO" : (mejorVal == ptL) ? "LIFO" : "ROUND ROBIN";
-    finalComp += "\n CONCLUSION: El algoritmo mas optimo es " + ganador + "\n";
-    finalComp += "************************************************************\n";
-
-    cout << finalComp;
-    archivoSalida << finalComp;
-
-    archivoSalida.close();
-    cout << "Los resultados han sido guardados en 'Resultados.txt'" << endl;
+    cout << "\n=============================================\n";
+    cout << " El mejor algoritmo es " << mejorOp << endl;
+    cout << " con un pT promedio de " << minPT << " unidades.\n";
+    cout << "=============================================\n";
 
     return 0;
 }
