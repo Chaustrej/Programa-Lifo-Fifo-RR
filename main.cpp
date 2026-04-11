@@ -73,7 +73,7 @@ public:
         return promedioT;
     }
 
-    // Algoritmos 
+    // Algoritmos Lifo
     vector<Proceso> modoEstatico(bool usarLifo) {
         vector<Proceso> copia = listaBase;
         vector<bool> completado(copia.size(), false);
@@ -83,7 +83,7 @@ public:
             int seleccionado = -1;
             for (int i = 0; i < (int)copia.size(); i++) {
                 // LIFO busca desde el ultimo ingresado (atras hacia adelante)
-                int idx = usarLifo ? (copia.size() - 1 - i) : i;
+                int idx = usarLifo ? (copia.size() - 1 - i) : i;// Cuando es falso realiza una busquedad ascendente lo cual se aplica en fifo si es verdadero se aplica la busqueda descente que es para lifo 
                 if (!completado[idx] && copia[idx].ti <= cronometro) {
                     seleccionado = idx; 
                     break;
