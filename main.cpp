@@ -28,7 +28,7 @@ private:
 
     void calcularMetricas(Proceso &p) {
         p.T = (double)p.tf - p.ti;
-        p.E = p.T - p.t; // Formula: E = T - t
+        p.E = p.T - p.t; 
         p.I = (p.T > 0) ? (double)p.t / p.T : 0;
     }
 
@@ -51,30 +51,33 @@ public:
         }
     }
 
-    // 
-    double imprimirTabla(string metodo, const vector<Proceso> &resultados) {
+    // Escribe los resultados tanto en consola como en el archivo TXT
+    double imprimirTabla(string metodo, const vector<Proceso> &resultados, ofstream &archivo) {
         double acumT = 0, acumE = 0, acumI = 0;
         int n = resultados.size();
 
-        cout << "\n>>> ESTRATEGIA: " << metodo << " <<<\n";
-        cout << "ID\tti\tt\ttf\tT\tE\tI\n" << string(50, '-') << endl;
+        stringstream ss;
+        ss << "\n>>> ESTRATEGIA: " << metodo << " <<<\n";
+        ss << "ID\tti\tt\ttf\tT\tE\tI\n" << string(50, '-') << endl;
 
         for (const auto &p : resultados) {
             acumT += p.T; acumE += p.E; acumI += p.I;
-            cout << p.id << "\t" << p.ti << "\t" << p.t << "\t" << p.tf << "\t" 
-                 << (int)p.T << "\t" << (int)p.E << "\t" 
-                 << fixed << setprecision(4) << p.I << endl;
+            ss << p.id << "\t" << p.ti << "\t" << p.t << "\t" << p.tf << "\t" 
+               << (int)p.T << "\t" << (int)p.E << "\t" 
+               << fixed << setprecision(4) << p.I << endl;
         }
 
-        double promedioI = (acumI / n) * 100; // Convertimos a porcentaje para la comparativa
-        cout << string(50, '-') << endl;
-        cout << "PROMEDIOS: pT=" << fixed << setprecision(2) << acumT/n 
-             << " | pE=" << acumE/n << " | pI=" << promedioI << "%\n";
+        double promedioI = (acumI / n) * 100;
+        ss << string(50, '-') << endl;
+        ss << "PROMEDIOS: pT=" << fixed << setprecision(2) << acumT/n 
+           << " | pE=" << acumE/n << " | pI=" << promedioI << "%\n";
+        
+        cout << ss.str();    
+        archivo << ss.str();
         
         return promedioI; 
     }
 
-    // Algoritmo fifo y lifo
     vector<Proceso> modoEstatico(bool usarLifo) {
         vector<Proceso> copia = listaBase;
         vector<bool> completado(copia.size(), false);
@@ -89,11 +92,7 @@ public:
                     break;
                 }
             }
-
-            if (seleccionado == -1) { 
-                cronometro++; 
-                continue; 
-            }
+            if (seleccionado == -1) { cronometro++; continue; }
 
             cronometro += copia[seleccionado].t;
             copia[seleccionado].tf = cronometro;
@@ -104,7 +103,6 @@ public:
         return copia; 
     }
 
-    // Algoritmo Round Robin 
     vector<Proceso> modoCircular(int quantum) {
         vector<Proceso> copia = listaBase;
         int n = copia.size();
@@ -151,21 +149,40 @@ int main() {
     GestorProcesos sistema;
     sistema.cargarDatos("data/Datos.csv");
 
+    // Creamos y abrimos el archivo de texto
+    ofstream archivoTxt("Reporte_Planificacion.txt");
+    if (!archivoTxt) {
+        cerr << "Error al crear el archivo de reporte." << endl;
+        return 1;
+    }
+
     int qUsuario;
     cout << "Ingrese el valor del Quantum para Round Robin: ";
     cin >> qUsuario;
 
-    double pIFIFO = sistema.imprimirTabla("FIFO", sistema.modoEstatico(false));
-    double pILIFO = sistema.imprimirTabla("LIFO", sistema.modoEstatico(true));
-    double pIRR   = sistema.imprimirTabla("ROUND ROBIN (Q=" + to_string(qUsuario) + ")", sistema.modoCircular(qUsuario));
+    archivoTxt << "---REPORTE---\n";
+    archivoTxt << "Quantum definido por usuario: " << qUsuario << "\n";
 
+    // Ejecución y grabado de datos
+    double pIFIFO = sistema.imprimirTabla("FIFO", sistema.modoEstatico(false), archivoTxt);
+    double pILIFO = sistema.imprimirTabla("LIFO", sistema.modoEstatico(true), archivoTxt);
+    double pIRR   = sistema.imprimirTabla("ROUND ROBIN (Q=" + to_string(qUsuario) + ")", sistema.modoCircular(qUsuario), archivoTxt);
+
+    // Comparativa final por pI
     double mejorPI = max({pIFIFO, pILIFO, pIRR});
     string mejorOp = (mejorPI == pIFIFO) ? "FIFO" : (mejorPI == pILIFO) ? "LIFO" : "ROUND ROBIN";
 
-    cout << "\n=============================================\n";
-    cout << " El mejor algoritmo es " << mejorOp << endl;
-    cout << " con un rendimiento promedio de " << fixed << setprecision(2) << mejorPI << "%.\n";
-    cout << "=============================================\n";
+    stringstream conclusion;
+    conclusion << "\n==================\n";
+    conclusion << " El mejor algoritmo es " << mejorOp << endl;
+    conclusion << " con un rendimiento promedio: " << fixed << setprecision(2) << mejorPI << "%.\n";
+    conclusion << "=====================\n";
+
+    cout << conclusion.str();
+    archivoTxt << conclusion.str();
+
+    archivoTxt.close();
+    cout << "\n Se ha creado el archivo 'Reporte_Planificacion.txt' con todos los resultados.\n";
 
     return 0;
 }
