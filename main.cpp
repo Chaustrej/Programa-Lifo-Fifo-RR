@@ -14,12 +14,12 @@ using namespace std;
 struct Proceso {
     string id;
     int ti;            // Tiempo de llegada
-    int t;             // Tiempo de ejecucion
+    int t;             // Tiempo de ejecución
     int tf = 0;        // Tiempo final
-    int t_restante;    // Auxiliar para Round Robin
+    int t_restante;    // Para Round Robin
     double T = 0;      // Tiempo de retorno
-    double E = 0;      // Tiempo de espera (Eficacia)
-    double I = 0;      // Indice de rendimiento
+    double E = 0;      // Tiempo de espera
+    double I = 0;      // Índice de rendimiento
 };
 
 class GestorProcesos {
@@ -28,7 +28,7 @@ private:
 
     void calcularMetricas(Proceso &p) {
         p.T = (double)p.tf - p.ti;
-        p.E = p.T - p.t; 
+        p.E = p.T - p.t; // Formula: E = T - t
         p.I = (p.T > 0) ? (double)p.t / p.T : 0;
     }
 
@@ -51,6 +51,7 @@ public:
         }
     }
 
+    // 
     double imprimirTabla(string metodo, const vector<Proceso> &resultados) {
         double acumT = 0, acumE = 0, acumI = 0;
         int n = resultados.size();
@@ -65,15 +66,15 @@ public:
                  << fixed << setprecision(4) << p.I << endl;
         }
 
-        double promedioT = acumT / n;
+        double promedioI = (acumI / n) * 100; // Convertimos a porcentaje para la comparativa
         cout << string(50, '-') << endl;
-        cout << "PROMEDIOS: pT=" << fixed << setprecision(2) << promedioT 
-             << " | pE=" << acumE/n << " | pI=" << (acumI/n)*100 << "%\n";
+        cout << "PROMEDIOS: pT=" << fixed << setprecision(2) << acumT/n 
+             << " | pE=" << acumE/n << " | pI=" << promedioI << "%\n";
         
-        return promedioT;
+        return promedioI; 
     }
 
-    // Algoritmos Lifo
+    // Algoritmo fifo y lifo
     vector<Proceso> modoEstatico(bool usarLifo) {
         vector<Proceso> copia = listaBase;
         vector<bool> completado(copia.size(), false);
@@ -82,8 +83,7 @@ public:
         while (finalizados < copia.size()) {
             int seleccionado = -1;
             for (int i = 0; i < (int)copia.size(); i++) {
-                // LIFO busca desde el ultimo ingresado (atras hacia adelante)
-                int idx = usarLifo ? (copia.size() - 1 - i) : i;// Cuando es falso realiza una busquedad ascendente lo cual se aplica en fifo si es verdadero se aplica la busqueda descente que es para lifo 
+                int idx = usarLifo ? (copia.size() - 1 - i) : i;
                 if (!completado[idx] && copia[idx].ti <= cronometro) {
                     seleccionado = idx; 
                     break;
@@ -91,7 +91,7 @@ public:
             }
 
             if (seleccionado == -1) { 
-                cronometro++; // Simula tiempo de espera del CPU (No Op)
+                cronometro++; 
                 continue; 
             }
 
@@ -104,7 +104,7 @@ public:
         return copia; 
     }
 
-    // Algoritmo Round Robin
+    // Algoritmo Round Robin 
     vector<Proceso> modoCircular(int quantum) {
         vector<Proceso> copia = listaBase;
         int n = copia.size();
@@ -151,18 +151,20 @@ int main() {
     GestorProcesos sistema;
     sistema.cargarDatos("data/Datos.csv");
 
-    // Ejecucion manteniendo el orden ID original en la tabla
-    double resFIFO = sistema.imprimirTabla("FIFO", sistema.modoEstatico(false));
-    double resLIFO = sistema.imprimirTabla("LIFO", sistema.modoEstatico(true));
-    double resRR   = sistema.imprimirTabla("ROUND ROBIN (Q=4)", sistema.modoCircular(4));
+    int qUsuario;
+    cout << "Ingrese el valor del Quantum para Round Robin: ";
+    cin >> qUsuario;
 
-    // Comparativa final
-    double minPT = min({resFIFO, resLIFO, resRR});
-    string mejorOp = (minPT == resFIFO) ? "FIFO" : (minPT == resLIFO) ? "LIFO" : "ROUND ROBIN";
+    double pIFIFO = sistema.imprimirTabla("FIFO", sistema.modoEstatico(false));
+    double pILIFO = sistema.imprimirTabla("LIFO", sistema.modoEstatico(true));
+    double pIRR   = sistema.imprimirTabla("ROUND ROBIN (Q=" + to_string(qUsuario) + ")", sistema.modoCircular(qUsuario));
+
+    double mejorPI = max({pIFIFO, pILIFO, pIRR});
+    string mejorOp = (mejorPI == pIFIFO) ? "FIFO" : (mejorPI == pILIFO) ? "LIFO" : "ROUND ROBIN";
 
     cout << "\n=============================================\n";
     cout << " El mejor algoritmo es " << mejorOp << endl;
-    cout << " con un pT promedio de " << minPT << " unidades.\n";
+    cout << " con un rendimiento promedio de " << fixed << setprecision(2) << mejorPI << "%.\n";
     cout << "=============================================\n";
 
     return 0;
