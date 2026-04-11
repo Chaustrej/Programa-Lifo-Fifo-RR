@@ -170,7 +170,7 @@ int main() {
 
     // Comparativa Final
     string finalComp = "\n************************************************************\n";
-    finalComp += "   COMPARATIVA FINAL POR pT (Promedio de Eficacia)\n";
+    finalComp += "   Comparacion por promedio de eficacia\n";
     finalComp += "************************************************************\n";
     finalComp += " - FIFO: " + to_string(ptF) + "\n - LIFO: " + to_string(ptL) + "\n - RR:   " + to_string(ptR) + "\n";
     
