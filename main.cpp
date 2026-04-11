@@ -75,7 +75,7 @@ double procesarYGrabar(string nombre, vector<Actividad> &res, double micro, ofst
     double pT = sumT / n;
     string footer = "----------------------------------------------------------\n";
     footer += "PROMEDIOS: pT=" + to_string(pT) + " | pE=" + to_string(sumE/n) + " | pI=" + to_string(sumI/n) + "\n";
-    footer += "TIEMPO DE CALCULO: " + to_string(micro) + " us\n";
+    footer += "TIEMPO DE CALCULO: " + to_string(micro) + " sec\n";
 
     cout << footer;
     salida << footer;
